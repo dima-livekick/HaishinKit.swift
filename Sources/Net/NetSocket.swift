@@ -96,27 +96,34 @@ open class NetSocket: NSObject {
         }
         var total: Int = 0
         while total < maxLength {
-            guard let outputStream = outputStream else {
+            guard let outputStream = outputStream, outputStream.streamStatus == .open else {
                 return
             }
-            let length: Int = outputStream.write(buffer.advanced(by: total), maxLength: maxLength - total)
-            if length <= 0 {
-                break
+            if outputStream.hasSpaceAvailable {
+                let length: Int = outputStream.write(buffer.advanced(by: total), maxLength: maxLength - total)
+                if length <= 0 {
+                    break
+                }
+                total += length
+                totalBytesOut += Int64(length)
+                OSAtomicAdd64(-Int64(length), &queueBytesOut)
+            } else {
+                sleep(1)
+                continue
             }
-            total += length
-            totalBytesOut += Int64(length)
-            OSAtomicAdd64(-Int64(length), &queueBytesOut)
         }
     }
 
     func close(isDisconnected: Bool) {
-        guard let runloop: RunLoop = self.runloop else {
-            return
+        outputQueue.async {
+            guard let runloop: RunLoop = self.runloop else {
+                return
+            }
+            self.deinitConnection(isDisconnected: isDisconnected)
+            self.runloop = nil
+            CFRunLoopStop(runloop.getCFRunLoop())
+            logger.trace("isDisconnected: \(isDisconnected)")
         }
-        deinitConnection(isDisconnected: isDisconnected)
-        self.runloop = nil
-        CFRunLoopStop(runloop.getCFRunLoop())
-        logger.trace("isDisconnected: \(isDisconnected)")
     }
 
     func initConnection() {
