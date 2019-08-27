@@ -2,7 +2,8 @@ import AVFoundation
 
 open class HTTPStream: NetStream {
     private(set) var name: String?
-    private lazy var tsWriter = TSFileWriter()
+    public var tsWriter: TSWriter { return _tsWriter }
+    private lazy var _tsWriter = TSFileWriter()
 
     open func publish(_ name: String?) {
         lockQueue.async {
@@ -12,34 +13,34 @@ open class HTTPStream: NetStream {
                 self.mixer.videoIO.screen?.stopRunning()
                 #endif
                 self.mixer.stopEncoding()
-                self.tsWriter.stopRunning()
+                self._tsWriter.stopRunning()
                 return
             }
             self.name = name
             #if os(iOS)
             self.mixer.videoIO.screen?.startRunning()
             #endif
-            self.mixer.startEncoding(delegate: self.tsWriter)
+            self.mixer.startEncoding(delegate: self._tsWriter)
             self.mixer.startRunning()
-            self.tsWriter.startRunning()
+            self._tsWriter.startRunning()
         }
     }
 
     #if os(iOS) || os(macOS)
     override open func attachCamera(_ camera: AVCaptureDevice?, onError: ((NSError) -> Void)? = nil) {
         if camera == nil {
-            tsWriter.expectedMedias.remove(.video)
+            _tsWriter.expectedMedias.remove(.video)
         } else {
-            tsWriter.expectedMedias.insert(.video)
+            _tsWriter.expectedMedias.insert(.video)
         }
         super.attachCamera(camera, onError: onError)
     }
 
     override open func attachAudio(_ audio: AVCaptureDevice?, automaticallyConfiguresApplicationAudioSession: Bool = true, onError: ((NSError) -> Void)? = nil) {
         if audio == nil {
-            tsWriter.expectedMedias.remove(.audio)
+            _tsWriter.expectedMedias.remove(.audio)
         } else {
-            tsWriter.expectedMedias.insert(.audio)
+            _tsWriter.expectedMedias.insert(.audio)
         }
         super.attachAudio(audio, automaticallyConfiguresApplicationAudioSession: automaticallyConfiguresApplicationAudioSession, onError: onError)
     }
@@ -53,9 +54,9 @@ open class HTTPStream: NetStream {
         let fileName: String = url.pathComponents.last!
         switch true {
         case fileName == "playlist.m3u8":
-            return (.applicationXMpegURL, tsWriter.playlist)
+            return (.applicationXMpegURL, _tsWriter.playlist)
         case fileName.contains(".ts"):
-            if let mediaFile: String = tsWriter.getFilePath(fileName) {
+            if let mediaFile: String = _tsWriter.getFilePath(fileName) {
                 return (.videoMP2T, mediaFile)
             }
             return nil
